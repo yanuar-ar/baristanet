@@ -10,22 +10,26 @@ contract LattePool is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     error InvalidSignature();
+    error AlreadyBorrowed();
 
     mapping(address => mapping(address => uint256)) public borrowed;
+    mapping(bytes32 => bool) public hasBorrowed;
 
     function borrow(address token, uint256 amount, bytes32 sequencerSignature) external nonReentrant {
-        if (!_verifySequencerApproval(abi.encode(msg.sender, token, amount), sequencerSignature)) {
-            revert InvalidSignature();
-        }
+        bytes32 borrowId = keccak256(abi.encode(msg.sender, token, amount));
+        if (hasBorrowed[borrowId]) revert AlreadyBorrowed();
+        if (!_verifySequencerApproval(borrowId, sequencerSignature)) revert InvalidSignature();
 
+        hasBorrowed[borrowId] = true;
         borrowed[msg.sender][token] += amount;
+        IERC20(token).safeTransfer(msg.sender, amount);
     }
 
     function repay(address token, uint256 amount) external nonReentrant {
         borrowed[msg.sender][token] -= amount;
     }
 
-    function _verifySequencerApproval(bytes memory data, bytes32 sequencerSignature) internal pure returns (bool) {
+    function _verifySequencerApproval(bytes32 data, bytes32 sequencerSignature) internal pure returns (bool) {
         // TODO: Implement signature verification
         return true;
     }
